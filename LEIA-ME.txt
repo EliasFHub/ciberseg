@@ -1,0 +1,17 @@
+Laboratório de permissão de câmera
+
+1. Extraia todos os arquivos para a mesma pasta.
+2. Abra o terminal nessa pasta e execute python servidor.py.
+   No Windows, se necessário, use py servidor.py.
+3. Abra http://127.0.0.1:8000 no navegador.
+4. Nas ferramentas do navegador, abra a aba Rede e filtre por imagem-teste.
+   Você pode limpar a lista após a página carregar para ocultar o GET inicial.
+5. Teste a câmera e capture um quadro. A captura não gera um POST.
+6. Clique em Enviar imagem de teste. Observe o POST /imagem-teste, o código
+   200 e o comprovante na aba Resposta. A cópia da figura fica no arquivo
+   imagem-teste-recebida.png, na pasta do laboratório.
+7. Use Encerrar e apagar para descartar o quadro da aba. No terminal,
+   Ctrl+C encerra o servidor.
+
+O servidor usa somente a biblioteca padrão do Python 3 e escuta apenas
+na própria máquina. Cada aluno pode executar a própria cópia do laboratório.

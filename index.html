@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; form-action 'none'; base-uri 'none'">
+<title>Permissão de câmera | Aula de cibersegurança</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0c1320; color: #edf4ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { width: min(100% - 2rem, 64rem); margin: 3rem auto; }
+  h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.055em; margin: .35rem 0 .7rem; line-height: 1.05; }
+  h2 { margin: 0 0 .75rem; font-size: 1.15rem; }
+  header p { margin: 0; max-width: 58ch; color: #bccbe0; }
+  .course { color: #83f3d3; font-size: .9rem; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem; margin-top: 2rem; }
+  section, aside { padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid #34445d; border-radius: 1rem; background: #151f30; }
+  .preview { background: #0a101b; border: 1px solid #34445d; border-radius: .65rem; aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; color: #bccbe0; text-align: center; }
+  video, canvas { display: block; width: 100%; height: 100%; object-fit: contain; min-height: 0; }
+  [hidden] { display: none !important; }
+  .actions { display: flex; gap: .65rem; flex-wrap: wrap; margin-top: 1rem; }
+  button { font: inherit; font-weight: 650; border-radius: .5rem; padding: .65rem .85rem; border: 1px solid #63738b; color: inherit; background: #24334b; cursor: pointer; }
+  #start { background: #83f3d3; color: #10241e; border-color: #83f3d3; }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  #status, aside li { color: #cbd8eb; line-height: 1.5; }
+  #status { margin-bottom: 0; }
+  ol { padding-left: 1.35rem; margin-bottom: 0; }
+  li + li { margin-top: .75rem; }
+  @media (max-width: 48rem) { .grid { grid-template-columns: 1fr; } }
+  .test-image { display: block; width: min(100%, 15rem); height: auto; border-radius: .5rem; }
+  .network-test { margin-top: 1rem; }
+  #send-status { color: #cbd8eb; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="course">Aula de cibersegurança</div>
+    <h1>Permissão de câmera</h1>
+    <p>Experimente o pedido de permissão do navegador e veja como uma página consegue capturar um quadro. A imagem fica apenas na memória desta aba.</p>
+  </header>
+  <div class="grid">
+    <section aria-labelledby="preview-title">
+      <h2 id="preview-title">Prévia</h2>
+      <div class="preview">
+        <div id="placeholder">Nenhuma imagem exibida</div>
+        <video id="video" autoplay muted playsinline hidden></video>
+        <canvas id="photo" role="img" aria-label="Quadro capturado da câmera" hidden></canvas>
+      </div>
+      <div class="actions">
+        <button id="start" type="button">Testar câmera</button>
+        <button id="capture" type="button" disabled>Capturar quadro</button>
+        <button id="clear" type="button" disabled>Encerrar e apagar</button>
+      </div>
+      <p id="status" role="status">Câmera desligada. Escolha se deseja iniciar o teste.</p>
+    </section>
+    <aside aria-labelledby="exercise">
+      <h2 id="exercise">Experimento em aula</h2>
+      <ol>
+        <li>Clique em <strong>Testar câmera</strong> e negue o acesso no navegador. Observe o resultado.</li>
+        <li>Se a negativa ficar salva, redefina a permissão no ícone ao lado do endereço. Teste de novo, permita o acesso e encontre o indicador de câmera em uso.</li>
+        <li>Abra as ferramentas do navegador na aba <strong>Rede</strong> e filtre por <code>imagem-teste</code>. Capture um quadro e veja que a captura não gera um POST. Depois, envie a figura fictícia e abra a requisição que apareceu.</li>
+      </ol>
+    </aside>
+  </div>
+  <section class="network-test" aria-labelledby="network-title">
+    <h2 id="network-title">Envio ao servidor local</h2>
+    <p>Este botão envia somente a figura abaixo. O quadro da câmera fica na aba.</p>
+    <img class="test-image" src="/imagem-teste.png" width="400" height="240" alt="Figura fictícia com o texto Imagem de teste">
+    <div class="actions">
+      <button id="send-test" type="button" disabled>Enviar imagem de teste</button>
+    </div>
+    <p id="send-status" role="status">Carregando a figura de teste.</p>
+  </section>
+</main>
+<script>
+  const video = document.getElementById("video");
+  const photo = document.getElementById("photo");
+  const placeholder = document.getElementById("placeholder");
+  const start = document.getElementById("start");
+  const capture = document.getElementById("capture");
+  const clear = document.getElementById("clear");
+  const status = document.getElementById("status");
+
+  let stream = null;
+  let attempt = 0;
+
+  function stopCamera() {
+    stream?.getTracks().forEach(track => track.stop());
+    stream = null;
+    video.srcObject = null;
+    video.hidden = true;
+    capture.disabled = true;
+    start.disabled = false;
+  }
+
+  function reset(message) {
+    attempt += 1;
+    stopCamera();
+    photo.width = 0;
+    photo.height = 0;
+    photo.hidden = true;
+    placeholder.hidden = false;
+    clear.disabled = true;
+    status.textContent = message;
+  }
+
+  start.addEventListener("click", async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      status.textContent = "A câmera requer um contexto seguro. Abra esta página em localhost ou HTTPS.";
+      return;
+    }
+    const request = ++attempt;
+    start.disabled = true;
+    clear.disabled = false;
+    status.textContent = "Aguardando a permissão do navegador.";
+    try {
+      const camera = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      if (request !== attempt) {
+        camera.getTracks().forEach(track => track.stop());
+        return;
+      }
+      stream = camera;
+      camera.getVideoTracks()[0].addEventListener("ended", () => {
+        if (stream === camera) reset("O acesso à câmera foi encerrado.");
+      });
+      video.srcObject = camera;
+      await video.play();
+      if (request !== attempt) return;
+      placeholder.hidden = true;
+      video.hidden = false;
+      capture.disabled = false;
+      status.textContent = "Câmera ligada. Você pode capturar um quadro ou encerrar o teste.";
+    } catch (error) {
+      if (request !== attempt) return;
+      const messages = {
+        NotAllowedError: "Acesso à câmera bloqueado. Confira a permissão no navegador.",
+        NotFoundError: "Nenhuma câmera foi encontrada.",
+        NotReadableError: "Não foi possível abrir a câmera. Ela pode estar em uso."
+      };
+      reset(messages[error.name] || "Não foi possível iniciar a câmera.");
+    }
+  });
+
+  capture.addEventListener("click", () => {
+    if (!stream || !video.videoWidth || !video.videoHeight) return;
+    photo.width = video.videoWidth;
+    photo.height = video.videoHeight;
+    photo.getContext("2d").drawImage(video, 0, 0);
+    stopCamera();
+    start.disabled = true;
+    photo.hidden = false;
+    status.textContent = "Quadro capturado nesta aba. A câmera foi desligada.";
+  });
+
+  clear.addEventListener("click", () => reset("Teste encerrado. A imagem foi apagada."));
+  window.addEventListener("pagehide", () => reset("Câmera desligada."));
+  const sendTest = document.getElementById("send-test");
+  const sendStatus = document.getElementById("send-status");
+
+  async function prepareTestImage() {
+    try {
+      const asset = await fetch("/imagem-teste.png");
+      if (!asset.ok) throw new Error("Figura indisponível.");
+      const testImage = await asset.blob();
+
+      sendTest.addEventListener("click", async () => {
+        sendTest.disabled = true;
+        sendStatus.textContent = "Enviando a figura fictícia.";
+        try {
+          const response = await fetch("/imagem-teste", {
+            method: "POST",
+            body: testImage
+          });
+          if (!response.ok) throw new Error("Envio recusado.");
+          const receipt = await response.json();
+          sendStatus.textContent = "POST " + response.status + " · " +
+            receipt.bytes + " bytes gravados em " + receipt.arquivo + ".";
+        } catch {
+          sendStatus.textContent = "Falha no envio. Confira se o servidor local está aberto.";
+        } finally {
+          sendTest.disabled = false;
+        }
+      });
+
+      sendTest.disabled = false;
+      sendStatus.textContent = "Figura pronta. Observe a aba Rede ao clicar em enviar.";
+    } catch {
+      sendStatus.textContent = "Inicie o servidor local para carregar a figura de teste.";
+    }
+  }
+
+  prepareTestImage();
+</script>
+</body>
+</html>
